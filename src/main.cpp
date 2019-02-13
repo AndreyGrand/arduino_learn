@@ -1,54 +1,146 @@
-#include <Arduino.h>
+// упрощенная охранная сигнализация
+
+#include <MsTimer2.h>
 #include <Button.h>
-/*  Программа sketch_7_2 урока 7 
- *  Подключены две кнопки и светодиод
- *  Каждое нажатие кнопки 1 инвертирует состояние светодиода на плате Ардуино
- *  Каждое нажатие кнопки 2 инвертирует состояние светодиода на макетной плате */
 
-#define LED_1_PIN 13     // номер вывода светодиода 1 равен 13
-#define BUTTON_1_PIN 12  // номер вывода кнопки 1 равен 12
-#define BUTTON_2_PIN 11  // номер вывода кнопки 2 равен 11
-#define LED_2_PIN 10     // номер вывода светодиода 2 равен 10
+#define DOOR_SENS_PIN 12     // датчик двери подключен к выводу 12
+#define SECRET_BUTTON_PIN 11 // скрытая кнопка подключена к выводу 11
+#define LED_PIN 10           // светодиод подключен к выводу 10
+#define SIREN_PIN 9          // сирена подключена к выводу 9
 
-boolean ledState1;         // переменная состояния светодиода 1
-boolean ledState2;         // переменная состояния светодиода 2
+#define TIME_LED_PERIOD 500 // время периода мигания светодиода (* 2 мс)
+#define TIME_LED_ON 100     // время включенного светодиода
+#define TIME_LED_ALARM 62   // время периода мигания светодиода при ТРЕВОГЕ (* 2 мс)
+#define TIME_ALARM 15000    // время в режиме ТРЕВОГА (* 2 мс)
 
-Button button1(BUTTON_1_PIN, 15);  // создание объекта для кнопки 1
-Button button2(BUTTON_2_PIN, 15);  // создание объекта для кнопки 2
-   
-void setup() {
-    Serial.begin(9600);
+Button doorSens(DOOR_SENS_PIN, 50);         // создание объекта датчик двери, типа кнопка
+Button secretButton(SECRET_BUTTON_PIN, 25); // создание объекта скрытая кнопка, типа кнопка
+
+boolean sirenOn;             // признак включения сирены
+unsigned int ledTimeCount;   // счетчик времени для светодиода
+unsigned int alarmTimeCount; // счетчик времени тревоги
+                             //------------------- обработчик прерывания 2 мс ---------------------
+volatile byte soundOn = false;
+void timerInterupt()
+{
+
+  doorSens.filterAvarage();     // вызов метода фильтрации сигнала для датчика двери
+  secretButton.filterAvarage(); // вызов метода фильтрации сигнала для скрытой кнопки
+                                // блок управления сиреной
+  if (sirenOn == true)
+  {
+    // tone(SIREN_PIN, 1000);
+    if (soundOn == false)
+    {
+      digitalWrite(LED_BUILTIN, HIGH);
+      soundOn = true;
+      Serial.println("Timer tone");
+      //tone(SIREN_PIN, 1000);
+    }
+  }
+  else if (soundOn)
+  {
+    Serial.println("Timer no tone");
+    soundOn = false;
+    //noTone(SIREN_PIN);
+    digitalWrite(LED_BUILTIN, LOW);
+  }
+
+  ledTimeCount++;   // счетчик времени мигания светодиода
+  alarmTimeCount++; // счетчик времени тревоги
+}
+void setup()
+{
+  Serial.begin(9600);
   while (!Serial)
   {
     ; // wait for serial port to connect. Needed for native USB port only
   }
-  pinMode(LED_1_PIN, OUTPUT);           // определяем вывод светодиода 1 как выход
-  pinMode(LED_2_PIN, OUTPUT);           // определяем вывод светодиода 2 как выход
+  pinMode(LED_PIN, OUTPUT);        // определяем вывод светодиода как выход
+  pinMode(SIREN_PIN, OUTPUT);      // определяем вывод сирены как выход
+  MsTimer2::set(2, timerInterupt); // задаем период прерывания по таймеру 2 мс
+  MsTimer2::start();               // разрешаем прерывание по таймеру
+  pinMode(LED_BUILTIN, OUTPUT);
+
 }
 
-// бесконечный цикл с периодом 2 мс
-void loop() {
+void loop()
+{
 
-  button1.filterAvarage(); // вызов метода сканирования сигнала кнопки 1
-  button2.scanState();  // вызов метода сканирования сигнала кнопки 2
-  
-  // блок управления светодиодом 1
-  if ( button1.flagClick == true ) {
-    // было нажатие кнопки
-    Serial.println("cliked 1");
-    button1.flagClick= false;         // сброс признака клика
-    ledState1= ! ledState1;             // инверсия состояния светодиода 1
-    digitalWrite(LED_1_PIN, ledState1);  // вывод состояния светодиода 1    
+//---------------------- режим ОТКЛЮЧЕНА --------------------------
+guard_off:
+  Serial.println("OFF");
+  while (true)
+  {
+
+    digitalWrite(LED_PIN, LOW); // светодиод не горит
+    sirenOn = false;            // сирена не звучит
+
+    // если нажали кнопку, переход на режим ОХРАНА
+    if (secretButton.flagClick == true)
+    {
+      secretButton.flagClick = false;
+      goto guard_on;
+    }
   }
 
-  // блок управления светодиодом 2
-  if ( button2.flagClick == true ) {
-    // было нажатие кнопки
-    Serial.println("cliked 2");
-    button2.flagClick= false;         // сброс признака клика
-    ledState2= ! ledState2;             // инверсия состояние светодиода 2
-    digitalWrite(LED_2_PIN, ledState2);  // вывод состояния светодиода 2    
+//---------------------- режим ОХРАНА --------------------------------
+guard_on:
+  Serial.println("ON");
+
+  while (true)
+  {
+
+    sirenOn = false;    // сирена не звучит
+    alarmTimeCount = 0; // сброс счетчика времени тревоги
+
+    // светодиод мигает раз в секунду
+    if (ledTimeCount >= TIME_LED_PERIOD)
+      ledTimeCount = 0;
+    if (ledTimeCount < TIME_LED_ON)
+      digitalWrite(LED_PIN, HIGH);
+    else
+      digitalWrite(LED_PIN, LOW);
+
+    // если нажали кнопку, переход на режим ОТКЛЮЧЕНА
+    if (secretButton.flagClick == true)
+    {
+      secretButton.flagClick = false;
+      goto guard_off;
+    }
+
+    // если сработал датчик двери, переход на режим ТРЕВОГА
+    if (doorSens.flagPress == true)
+      goto alarm;
   }
 
-  delay(2);  // задержка на 2 мс
+//---------------------- режим ТРЕВОГА --------------------------------
+alarm:
+  Serial.println("ALARM");
+
+  while (true)
+  {
+
+    sirenOn = true; // звучит сирена
+
+    // светодиод мигает 4 раза в секунду
+    if (ledTimeCount >= TIME_LED_ALARM)
+    {
+      ledTimeCount = 0;
+      digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+    }
+
+    // если нажали кнопку, переход на режим ОТКЛЮЧЕНА
+    if (secretButton.flagClick == true)
+    {
+      Serial.println("Cliked secret");
+
+      secretButton.flagClick = false;
+      goto guard_off;
+    }
+
+    // проверка времени тревоги ( 30 сек )
+    if (alarmTimeCount >= TIME_ALARM)
+      goto guard_off;
+  }
 }
