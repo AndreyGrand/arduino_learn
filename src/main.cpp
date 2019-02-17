@@ -2,6 +2,7 @@
 
 #include <MsTimer2.h>
 #include <Button.h>
+#include <Led4Digits.h>
 
 #define DOOR_SENS_PIN 12     // датчик двери подключен к выводу 12
 #define SECRET_BUTTON_PIN 11 // скрытая кнопка подключена к выводу 11
@@ -21,9 +22,14 @@ unsigned int ledTimeCount;   // счетчик времени для свето�
 unsigned int alarmTimeCount; // счетчик времени тревоги
                              //------------------- обработчик прерывания 2 мс ---------------------
 volatile byte soundOn = false;
+
+Led4Digits disp(0, 5,  2, 3, 4, 
+                7, A5, A3, A1, 
+                A0, 8, A4, A2 );    
+
 void timerInterupt()
 {
-
+  disp.regen(); // регенерация индикатора
   doorSens.filterAvarage();     // вызов метода фильтрации сигнала для датчика двери
   secretButton.filterAvarage(); // вызов метода фильтрации сигнала для скрытой кнопки
                                 // блок управления сиреной
@@ -66,7 +72,20 @@ void setup()
 
 void loop()
 {
-
+  for (int i = 0; i < 32; i++) {
+    if ( i == 0) disp.digit[0]= 1;
+    else if ( i == 8)  disp.digit[1]= 1;
+    else if ( i == 16) disp.digit[2]= 1;
+    else if ( i == 24) disp.digit[3]= 1;
+    else {
+      disp.digit[0] = disp.digit[0] << 1;
+      disp.digit[1] = disp.digit[1] << 1;
+      disp.digit[2] = disp.digit[2] << 1;
+      disp.digit[3] = disp.digit[3] << 1;      
+    }
+    delay(250);    
+  }  
+/*
 //---------------------- режим ОТКЛЮЧЕНА --------------------------
 guard_off:
   Serial.println("OFF");
@@ -143,4 +162,5 @@ alarm:
     if (alarmTimeCount >= TIME_ALARM)
       goto guard_off;
   }
+  */
 }

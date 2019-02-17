@@ -1,0 +1,6 @@
+Led4Digits	KEYWORD1
+
+regen	KEYWORD2
+tetradToSegCod	KEYWORD2
+print	KEYWORD2
+
