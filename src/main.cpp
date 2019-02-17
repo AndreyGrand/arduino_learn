@@ -23,13 +23,13 @@ unsigned int alarmTimeCount; // счетчик времени тревоги
                              //------------------- обработчик прерывания 2 мс ---------------------
 volatile byte soundOn = false;
 
-Led4Digits disp(0, 5,  2, 3, 4, 
-                7, A5, A3, A1, 
-                A0, 8, A4, A2 );    
+Led4Digits disp(2, 5, 2, 3, 4,
+                7, A5, A3, A1,
+                A0, 6, A4, A2);
 
 void timerInterupt()
 {
-  disp.regen(); // регенерация индикатора
+  disp.regen();                 // регенерация индикатора
   doorSens.filterAvarage();     // вызов метода фильтрации сигнала для датчика двери
   secretButton.filterAvarage(); // вызов метода фильтрации сигнала для скрытой кнопки
                                 // блок управления сиреной
@@ -55,6 +55,28 @@ void timerInterupt()
   ledTimeCount++;   // счетчик времени мигания светодиода
   alarmTimeCount++; // счетчик времени тревоги
 }
+void testLeds()
+{
+  for (int i = 0; i < 32; i++)
+  {
+    if (i == 0)
+      disp.digit[0] = 1;
+    else if (i == 8)
+      disp.digit[1] = 1;
+    else if (i == 16)
+      disp.digit[2] = 1;
+    else if (i == 24)
+      disp.digit[3] = 1;
+    else
+    {
+      disp.digit[0] = disp.digit[0] << 1;
+      disp.digit[1] = disp.digit[1] << 1;
+      disp.digit[2] = disp.digit[2] << 1;
+      disp.digit[3] = disp.digit[3] << 1;
+    }
+    delay(250);  
+  }
+}
 void setup()
 {
   Serial.begin(9600);
@@ -67,25 +89,23 @@ void setup()
   MsTimer2::set(2, timerInterupt); // задаем период прерывания по таймеру 2 мс
   MsTimer2::start();               // разрешаем прерывание по таймеру
   pinMode(LED_BUILTIN, OUTPUT);
-
+  testLeds();
+//  disp.print(5678, 4, 1);
+  //disp.tetradToSegCod(0, 4);
 }
 
 void loop()
 {
-  for (int i = 0; i < 32; i++) {
-    if ( i == 0) disp.digit[0]= 1;
-    else if ( i == 8)  disp.digit[1]= 1;
-    else if ( i == 16) disp.digit[2]= 1;
-    else if ( i == 24) disp.digit[3]= 1;
-    else {
-      disp.digit[0] = disp.digit[0] << 1;
-      disp.digit[1] = disp.digit[1] << 1;
-      disp.digit[2] = disp.digit[2] << 1;
-      disp.digit[3] = disp.digit[3] << 1;      
-    }
-    delay(250);    
-  }  
-/*
+  for (int i = 0; i < 12000; i++)
+  {
+    disp.print(i, 4, 1);
+   // Serial.println(i);
+    delay(50);
+  }
+}
+
+
+  /*
 //---------------------- режим ОТКЛЮЧЕНА --------------------------
 guard_off:
   Serial.println("OFF");
@@ -163,4 +183,4 @@ alarm:
       goto guard_off;
   }
   */
-}
+
